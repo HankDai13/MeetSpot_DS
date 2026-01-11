@@ -41,9 +41,12 @@ class GeocodeTool(BaseTool):
             from app.tool.meetspot_recommender import CafeRecommender
             from app.config import config
             recommender = CafeRecommender()
-            # 确保 API key 已设置
-            if hasattr(config, 'amap') and config.amap and hasattr(config.amap, 'api_key'):
-                recommender.api_key = config.amap.api_key
+            # 确保 API key 已设置，优先使用 Web Service Key
+            if hasattr(config, 'amap') and config.amap:
+                if hasattr(config.amap, 'web_service_key') and config.amap.web_service_key:
+                    recommender.api_key = config.amap.web_service_key
+                elif hasattr(config.amap, 'api_key'):
+                    recommender.api_key = config.amap.api_key
             object.__setattr__(self, '_cached_recommender', recommender)
         return self._cached_recommender
 
@@ -131,8 +134,11 @@ class CalculateCenterTool(BaseTool):
             from app.tool.meetspot_recommender import CafeRecommender
             from app.config import config
             recommender = CafeRecommender()
-            if hasattr(config, 'amap') and config.amap and hasattr(config.amap, 'api_key'):
-                recommender.api_key = config.amap.api_key
+            if hasattr(config, 'amap') and config.amap:
+                if hasattr(config.amap, 'web_service_key') and config.amap.web_service_key:
+                    recommender.api_key = config.amap.web_service_key
+                elif hasattr(config.amap, 'api_key'):
+                    recommender.api_key = config.amap.api_key
             object.__setattr__(self, '_cached_recommender', recommender)
         return self._cached_recommender
 
@@ -242,8 +248,11 @@ class SearchPOITool(BaseTool):
             from app.tool.meetspot_recommender import CafeRecommender
             from app.config import config
             recommender = CafeRecommender()
-            if hasattr(config, 'amap') and config.amap and hasattr(config.amap, 'api_key'):
-                recommender.api_key = config.amap.api_key
+            if hasattr(config, 'amap') and config.amap:
+                if hasattr(config.amap, 'web_service_key') and config.amap.web_service_key:
+                    recommender.api_key = config.amap.web_service_key
+                elif hasattr(config.amap, 'api_key'):
+                    recommender.api_key = config.amap.api_key
             object.__setattr__(self, '_cached_recommender', recommender)
         return self._cached_recommender
 
@@ -397,8 +406,11 @@ class GenerateRecommendationTool(BaseTool):
             from app.tool.meetspot_recommender import CafeRecommender
             from app.config import config
             recommender = CafeRecommender()
-            if hasattr(config, 'amap') and config.amap and hasattr(config.amap, 'api_key'):
-                recommender.api_key = config.amap.api_key
+            if hasattr(config, 'amap') and config.amap:
+                if hasattr(config.amap, 'web_service_key') and config.amap.web_service_key:
+                    recommender.api_key = config.amap.web_service_key
+                elif hasattr(config.amap, 'api_key'):
+                    recommender.api_key = config.amap.api_key
             object.__setattr__(self, '_cached_recommender', recommender)
         return self._cached_recommender
 

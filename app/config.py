@@ -41,8 +41,12 @@ class SearchSettings(BaseModel):
 
 class AMapSettings(BaseModel):
     """高德地图API配置"""
-    api_key: str = Field(..., description="高德地图API密钥")
-    web_api_key: Optional[str] = Field(None, description="高德地图JavaScript API密钥")
+    # 兼容性字段：既可以是Web服务Key，也可以是JS Key，取决于历史配置
+    api_key: str = Field(..., description="高德地图API密钥 (通常作为默认Key)")
+    # 明确的新字段
+    web_service_key: Optional[str] = Field(None, description="高德地图 Web服务 API密钥 (用于后端请求)")
+    js_api_key: Optional[str] = Field(None, description="高德地图 Web端(JS) API密钥")
+    security_js_code: Optional[str] = Field(None, description="高德地图 JS API 安全密钥")
 
 
 class BrowserSettings(BaseModel):

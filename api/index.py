@@ -41,20 +41,18 @@ except ImportError as e:
     config = None
     config_available = False
 
-# 导入 Agent 模块（高内存消耗，暂时禁用以保证稳定性）
-agent_available = False  # 禁用 Agent 模式，节省内存
-# try:
-#     from app.agent import MeetSpotAgent, create_meetspot_agent
-#     agent_available = True
-#     print("✅ 成功导入 Agent 模块")
-# except ImportError as e:
-#     print(f"⚠️ Agent 模块导入失败: {e}")
-print("ℹ️ Agent 模块已禁用（节省内存）")
-
-
-def create_meetspot_agent():
-    """Stub function - Agent模式已禁用，此函数不应被调用"""
-    raise RuntimeError("Agent模式已禁用，请使用规则模式")
+# 导入 Agent 模块
+agent_available = False
+try:
+    from app.agent import MeetSpotAgent, create_meetspot_agent
+    agent_available = True
+    print("✅ 成功导入 Agent 模块")
+except ImportError as e:
+    print(f"⚠️ Agent 模块导入失败: {e}")
+    
+    def create_meetspot_agent():
+        """Stub function - Agent模块不可用时的回退"""
+        raise RuntimeError("Agent模块不可用，请使用规则模式")
 
 # 导入 LLM 模块
 llm_available = False
@@ -726,8 +724,8 @@ async def _process_meetspot_request(request: MeetSpotRequest, start_time: float)
             print(f"🤖 [Agent模式] 复杂请求，启用Agent智能分析...")
             try:
                 agent = create_meetspot_agent()
-                # 添加15秒超时，确保Agent模式不会无限等待
-                AGENT_TIMEOUT = 15  # 秒
+                # 添加60秒超时，确保Agent模式有足够时间完成(DeepSeek/Geocoding耗时较长)
+                AGENT_TIMEOUT = 60  # 秒
                 agent_result = await asyncio.wait_for(
                     agent.recommend(
                         locations=request.locations,
