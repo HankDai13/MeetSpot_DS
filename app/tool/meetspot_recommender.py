@@ -3681,44 +3681,123 @@ class CafeRecommender(BaseTool):
             }}
             
             // ========== 校园模式路径绘制 ==========
-            // 检测并绘制本地 Dijkstra 算法计算的路径（红色实线）
+            // 使用高德地图步行路径规划API绘制真实道路路径
             var localModeData = {local_mode_json};
+            var centerLngLat = new AMap.LngLat({center_point[0]}, {center_point[1]});
             
             var isLocalMode = localModeData.some(function(p) {{ return p.is_local; }});
             if (isLocalMode) {{
-                console.log('校园模式: 绘制 Dijkstra 路径');
-                localModeData.forEach(function(placeData, index) {{
-                    var pathCoords = placeData.path_coords;
-                    if (pathCoords && pathCoords.length > 1) {{
-                        var path = pathCoords.map(function(coord) {{
+                console.log('校园模式: 使用步行路径规划绘制路径');
+                
+                // 加载步行路径规划插件
+                AMap.plugin('AMap.Walking', function() {{
+                    var walking = new AMap.Walking({{
+                        map: map,
+                        panel: null,
+                        hideMarkers: true,  // 隐藏默认标记
+                        autoFitView: false
+                    }});
+                    
+                    // 为每个推荐场所绘制步行路径
+                    localModeData.forEach(function(placeData, index) {{
+                        if (!placeData.is_local) return;
+                        
+                        var pathCoords = placeData.path_coords;
+                        if (pathCoords && pathCoords.length >= 2) {{
+                            // 获取目的地坐标（路径的最后一个点）
+                            var destCoord = pathCoords[pathCoords.length - 1];
+                            var destLngLat = new AMap.LngLat(destCoord[0], destCoord[1]);
+                            
+                            // 使用步行路径规划
+                            walking.search(centerLngLat, destLngLat, function(status, result) {{
+                                if (status === 'complete' && result.routes && result.routes.length > 0) {{
+                                    // 获取路径坐标
+                                    var route = result.routes[0];
+                                    var walkPath = [];
+                                    route.steps.forEach(function(step) {{
+                                        walkPath = walkPath.concat(step.path);
+                                    }});
+                                    
+                                    // 绘制自定义样式的路径
+                                    var walkPolyline = new AMap.Polyline({{
+                                        path: walkPath,
+                                        strokeColor: '#FF4444',
+                                        strokeWeight: 5,
+                                        strokeOpacity: 0.85,
+                                        strokeStyle: 'solid',
+                                        lineJoin: 'round',
+                                        lineCap: 'round',
+                                        zIndex: 100 + index,
+                                        showDir: true  // 显示方向箭头
+                                    }});
+                                    walkPolyline.setMap(map);
+                                    
+                                    // 添加点击事件
+                                    walkPolyline.on('click', function() {{
+                                        var distance = route.distance;
+                                        var time = Math.ceil(route.time / 60);
+                                        var infoWindow = new AMap.InfoWindow({{
+                                            content: '<div style="padding:10px;font-size:13px;"><strong>🚶 步行路径</strong><br/>目的地: ' + placeData.name + '<br/>距离: ' + distance + '米<br/>预计时间: ' + time + '分钟</div>',
+                                            offset: new AMap.Pixel(0, -5)
+                                        }});
+                                        infoWindow.open(map, walkPath[Math.floor(walkPath.length / 2)]);
+                                    }});
+                                    
+                                    console.log('路径绘制成功: ' + placeData.name + ', 距离: ' + route.distance + 'm');
+                                }} else {{
+                                    // 如果路径规划失败，使用原始Dijkstra路径（带曲线优化）
+                                    console.log('路径规划失败，使用备用方案: ' + placeData.name);
+                                    drawFallbackPath(pathCoords, placeData.name, index);
+                                }}
+                            }});
+                        }}
+                    }});
+                }});
+                
+                // 备用绘制函数：当步行路径规划失败时使用
+                function drawFallbackPath(pathCoords, placeName, index) {{
+                    if (pathCoords.length < 2) return;
+                    
+                    var path;
+                    if (pathCoords.length === 2) {{
+                        // 只有2个点时，添加贝塞尔曲线中间点
+                        var start = pathCoords[0];
+                        var end = pathCoords[1];
+                        var midLng = (start[0] + end[0]) / 2;
+                        var midLat = (start[1] + end[1]) / 2;
+                        // 添加轻微偏移使路径呈弧形
+                        var offset = 0.0005;
+                        var perpLng = midLng + (end[1] - start[1]) * offset * 10;
+                        var perpLat = midLat - (end[0] - start[0]) * offset * 10;
+                        
+                        path = [
+                            new AMap.LngLat(start[0], start[1]),
+                            new AMap.LngLat(perpLng, perpLat),
+                            new AMap.LngLat(end[0], end[1])
+                        ];
+                    }} else {{
+                        path = pathCoords.map(function(coord) {{
                             return new AMap.LngLat(coord[0], coord[1]);
                         }});
-                        var localPolyline = new AMap.Polyline({{
-                            path: path,
-                            strokeColor: '#FF4444',  // 红色路径（校园模式特有）
-                            strokeWeight: 4,
-                            strokeOpacity: 0.9,
-                            strokeStyle: 'solid',
-                            lineJoin: 'round',
-                            lineCap: 'round',
-                            zIndex: 100 + index
-                        }});
-                        localPolyline.setMap(map);
-                        
-                        // 为路径添加点击事件显示信息
-                        localPolyline.on('click', function() {{
-                            var infoWindow = new AMap.InfoWindow({{
-                                content: '<div style="padding:8px;font-size:13px;"><strong>路径信息</strong><br/>目的地: ' + placeData.name + '<br/>算法: Dijkstra 最短路径</div>',
-                                offset: new AMap.Pixel(0, -5)
-                            }});
-                            infoWindow.open(map, path[Math.floor(path.length / 2)]);
-                        }});
                     }}
-                }});
+                    
+                    var polyline = new AMap.Polyline({{
+                        path: path,
+                        strokeColor: '#FF4444',
+                        strokeWeight: 4,
+                        strokeOpacity: 0.8,
+                        strokeStyle: 'dashed',  // 使用虚线区分
+                        lineJoin: 'round',
+                        lineCap: 'round',
+                        zIndex: 100 + index,
+                        geodesic: true  // 使用大地线
+                    }});
+                    polyline.setMap(map);
+                }}
                 
                 // 添加校园模式图例
                 var legendDiv = document.createElement('div');
-                legendDiv.innerHTML = '<div style="position:absolute;top:10px;right:10px;background:white;padding:10px 15px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.15);font-size:12px;z-index:999;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="display:inline-block;width:20px;height:3px;background:#FF4444;"></span><span>Dijkstra路径</span></div><div style="display:flex;align-items:center;gap:8px;"><span style="display:inline-block;width:20px;height:3px;background:#3498db;border-top:2px dashed #3498db;"></span><span>参与者连线</span></div></div>';
+                legendDiv.innerHTML = '<div style="position:absolute;top:10px;right:10px;background:white;padding:10px 15px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.15);font-size:12px;z-index:999;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="display:inline-block;width:20px;height:3px;background:#FF4444;"></span><span>步行路径</span></div><div style="display:flex;align-items:center;gap:8px;"><span style="display:inline-block;width:20px;height:3px;background:#3498db;border-top:2px dashed #3498db;"></span><span>参与者连线</span></div></div>';
                 document.getElementById('map').appendChild(legendDiv);
             }}
             
