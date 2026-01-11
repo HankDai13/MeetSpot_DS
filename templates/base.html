@@ -13,7 +13,7 @@
     <meta property="og:title" content="{{ meta_title }}">
     <meta property="og:description" content="{{ meta_description }}">
     <meta property="og:url" content="{{ canonical_url }}">
-    <meta property="og:site_name" content="MeetSpot">
+    <meta property="og:site_name" content="MeetSpot - 厦门大学">
     <meta property="og:image" content="https://meetspot-irq2.onrender.com/static/images/og-image.png">
 
     <meta name="twitter:card" content="summary_large_image">
@@ -226,33 +226,6 @@
             transform: scaleX(1);
         }
 
-        .github-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 20px;
-            background: linear-gradient(135deg, rgba(6, 214, 160, 0.2) 0%, rgba(255, 107, 53, 0.2) 100%);
-            border: 1px solid rgba(255, 107, 53, 0.4);
-            border-radius: 999px;
-            color: white;
-            text-decoration: none;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            backdrop-filter: blur(10px);
-            font-weight: 600;
-            font-family: "Outfit", sans-serif;
-        }
-
-        .github-badge:hover {
-            background: linear-gradient(135deg, rgba(6, 214, 160, 0.3) 0%, rgba(255, 107, 53, 0.3) 100%);
-            border-color: rgba(255, 107, 53, 0.6);
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(255, 107, 53, 0.3);
-        }
-
-        .github-badge i {
-            font-size: 1.3rem;
-        }
-
         /* Main Content Container */
         .container {
             max-width: 1400px;
@@ -343,61 +316,15 @@
             margin: 6px 0;
         }
 
-        .author-info a {
-            color: var(--nav-secondary);
-            font-weight: 600;
-        }
-
         .project-stat {
             color: var(--nav-secondary);
             font-weight: 600;
         }
 
-        .social-links, .footer-links {
+        .footer-links {
             display: flex;
             flex-direction: column;
             gap: 12px;
-        }
-
-        .social-btn {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 12px 20px;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 107, 53, 0.3);
-            background: rgba(255, 255, 255, 0.05);
-            color: white;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            text-decoration: none;
-            font-weight: 600;
-            font-family: "Outfit", sans-serif;
-            justify-content: center;
-        }
-
-        .social-btn:hover {
-            transform: translateY(-2px) scale(1.02);
-            box-shadow: 0 8px 24px rgba(255, 107, 53, 0.3);
-            border-color: rgba(255, 107, 53, 0.6);
-            background: rgba(255, 107, 53, 0.15);
-            color: white;
-        }
-
-        .social-btn i {
-            font-size: 1.3rem;
-        }
-
-        .wechat-btn:hover {
-            background: rgba(6, 214, 160, 0.15);
-            border-color: var(--nav-secondary);
-        }
-        .github-btn:hover {
-            background: rgba(255, 255, 255, 0.1);
-        }
-        .blog-btn:hover {
-            background: rgba(255, 184, 77, 0.15);
-            border-color: var(--warning);
         }
 
         .footer-links a {
@@ -410,36 +337,6 @@
         .footer-links a:hover {
             color: var(--nav-accent);
             transform: translateX(4px);
-        }
-
-        .support-text {
-            font-size: 0.85rem;
-            color: rgba(255, 255, 255, 0.6);
-            margin-top: 12px;
-            font-style: italic;
-        }
-
-        .support-btn {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            padding: 14px 28px;
-            border-radius: 12px;
-            background: linear-gradient(135deg, var(--nav-accent) 0%, #D84315 100%);
-            color: white;
-            border: none;
-            cursor: pointer;
-            font-weight: 700;
-            font-family: "Outfit", sans-serif;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            width: 100%;
-            box-shadow: 0 4px 16px rgba(255, 107, 53, 0.4);
-        }
-
-        .support-btn:hover {
-            transform: translateY(-3px) scale(1.02);
-            box-shadow: 0 8px 32px rgba(255, 107, 53, 0.6);
         }
 
         .footer-bottom {
@@ -456,152 +353,6 @@
         .footer-bottom a {
             color: var(--nav-secondary);
             font-weight: 600;
-        }
-
-        /* Modal Styles */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 21, 36, 0.85);
-            backdrop-filter: blur(8px);
-            z-index: 9999;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal.active { display: flex; }
-
-        .modal-content {
-            background: white;
-            border-radius: 24px;
-            padding: 40px;
-            max-width: 520px;
-            width: 90%;
-            max-height: 90vh;
-            overflow-y: auto;
-            box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
-            position: relative;
-            animation: modalSlideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            border: 2px solid rgba(255, 107, 53, 0.2);
-        }
-
-        @keyframes modalSlideUp {
-            from {
-                opacity: 0;
-                transform: translateY(40px) scale(0.95);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
-        }
-
-        .modal-content h3 {
-            margin: 0 0 16px 0;
-            color: var(--nav-primary);
-            font-size: 1.75rem;
-            font-family: "Outfit", sans-serif;
-            font-weight: 900;
-        }
-
-        .modal-close {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: rgba(255, 107, 53, 0.1);
-            border: none;
-            font-size: 1.75rem;
-            cursor: pointer;
-            color: var(--nav-accent);
-            line-height: 1;
-            padding: 8px;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal-close:hover {
-            background: rgba(255, 107, 53, 0.2);
-            transform: rotate(90deg) scale(1.1);
-        }
-
-        .qr-container {
-            text-align: center;
-            margin-top: 24px;
-        }
-
-        .qr-container img {
-            max-width: 300px;
-            width: 100%;
-            border-radius: 16px;
-            box-shadow: var(--shadow-lg);
-            border: 3px solid rgba(10, 77, 104, 0.1);
-        }
-
-        .qr-notice {
-            margin-top: 20px;
-            padding: 16px;
-            background: linear-gradient(135deg, rgba(255, 184, 77, 0.1) 0%, rgba(255, 107, 53, 0.1) 100%);
-            border-left: 4px solid var(--warning);
-            color: #92400E;
-            font-weight: 600;
-            border-radius: 12px;
-            text-align: left;
-        }
-
-        .qr-fallback {
-            margin-top: 20px;
-            padding: 16px;
-            background: var(--bg-tertiary);
-            border-radius: 12px;
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-            text-align: left;
-            border: 1px solid rgba(10, 77, 104, 0.2);
-        }
-
-        .qr-fallback a {
-            color: var(--nav-accent);
-            font-weight: 600;
-        }
-
-        .support-message {
-            margin: 24px 0;
-            color: var(--text-secondary);
-            font-size: 1rem;
-        }
-
-        .other-support {
-            margin-top: 28px;
-            padding: 24px;
-            background: linear-gradient(135deg, rgba(10, 77, 104, 0.05) 0%, rgba(6, 214, 160, 0.05) 100%);
-            border-radius: 16px;
-            border: 1px solid rgba(10, 77, 104, 0.15);
-        }
-
-        .other-support p {
-            margin: 0 0 16px 0;
-            font-weight: 700;
-            color: var(--nav-primary);
-            font-family: "Outfit", sans-serif;
-        }
-
-        .other-support ul {
-            margin: 0;
-            padding-left: 24px;
-        }
-
-        .other-support li {
-            margin: 10px 0;
-            color: var(--text-secondary);
         }
 
         /* Responsive Design */
@@ -685,7 +436,7 @@
             <a href="/" class="brand">
                 <span class="logo-icon">📍</span>
                 <span class="logo-text">MeetSpot</span>
-                <span class="tagline">Fair Meetups</span>
+                <span class="tagline">厦门大学</span>
             </a>
             <nav class="main-nav">
                 <a href="/">首页</a>
@@ -693,10 +444,6 @@
                 <a href="/how-it-works">使用指南</a>
                 <a href="/faq">FAQ</a>
             </nav>
-            <a href="https://github.com/JasonRobertDestiny/MeetSpot" class="github-badge" target="_blank" rel="noopener">
-                <i class='bx bxl-github'></i>
-                <span>Star on GitHub</span>
-            </a>
         </div>
     </header>
 
@@ -725,26 +472,8 @@
                 <h3>MeetSpot 聚点</h3>
                 <p>智能聚会地点推荐系统，基于地理算法计算公平中点，让每次聚会都高效便捷。</p>
                 <div class="author-info">
-                    <p>作者：<a href="https://jasonrobert.me/" target="_blank" rel="noopener">Jason Robert</a></p>
-                    <p class="project-stat">开源项目 · 持续更新中</p>
-                </div>
-            </div>
-
-            <div class="footer-community">
-                <h3>加入社区</h3>
-                <div class="social-links">
-                    <button class="social-btn wechat-btn" onclick="showWeChatGroupModal()">
-                        <i class='bx bxl-wechat'></i>
-                        <span>个人微信</span>
-                    </button>
-                    <a href="https://github.com/JasonRobertDestiny/MeetSpot" class="social-btn github-btn" target="_blank" rel="noopener">
-                        <i class='bx bxl-github'></i>
-                        <span>GitHub仓库</span>
-                    </a>
-                    <a href="https://jasonrobert.me/" class="social-btn blog-btn" target="_blank" rel="noopener">
-                        <i class='bx bx-link-external'></i>
-                        <span>作者博客</span>
-                    </a>
+                    <p>厦门大学计算机系</p>
+                    <p class="project-stat">校园智能服务平台</p>
                 </div>
             </div>
 
@@ -756,90 +485,17 @@
                 <a href="/sitemap.xml">网站地图</a>
             </div>
 
-            <div class="footer-support">
-                <h3>支持项目</h3>
-                <p>如果MeetSpot对你有帮助</p>
-                <button class="support-btn" onclick="showSupportModal()">
-                    请我喝杯咖啡
-                </button>
-                <p class="support-text">MeetSpot是开源项目，您的支持是最大动力</p>
+            <div class="footer-about">
+                <h3>关于我们</h3>
+                <p>本项目由厦门大学计算机系开发，旨在为师生提供智能的聚会地点推荐服务。</p>
             </div>
         </div>
 
         <div class="footer-bottom">
-            <p>© 2025 MeetSpot · Built with ❤️ by <a href="https://jasonrobert.me/" target="_blank">Jason Robert</a></p>
+            <p>© 2025 MeetSpot 聚点 · 厦门大学计算机系</p>
         </div>
     </footer>
 
-    <!-- 个人微信 Modal -->
-    <div id="wechat-modal" class="modal" onclick="closeModal(event, 'wechat-modal')">
-        <div class="modal-content" onclick="event.stopPropagation()">
-            <button class="modal-close" onclick="closeModal(event, 'wechat-modal')" aria-label="关闭">&times;</button>
-            <h3>添加个人微信</h3>
-            <p>扫码添加好友，交流使用心得</p>
-            <div class="qr-container">
-                <img src="/public/docs/vx_chat.png" alt="个人微信二维码" title="扫描二维码添加微信好友" loading="lazy">
-            </div>
-        </div>
-    </div>
-
-    <!-- 打赏 Modal -->
-    <div id="support-modal" class="modal" onclick="closeModal(event, 'support-modal')">
-        <div class="modal-content" onclick="event.stopPropagation()">
-            <button class="modal-close" onclick="closeModal(event, 'support-modal')" aria-label="关闭">&times;</button>
-            <h3>感谢你的支持</h3>
-            <p>MeetSpot是完全免费的开源项目，你的赞赏将帮助项目持续改进</p>
-            <div class="qr-container">
-                <img src="/public/docs/vx_payment.png" alt="微信支付码" title="使用微信赞赏MeetSpot" loading="lazy">
-                <p class="support-message">你的每一份支持都是最大的动力</p>
-            </div>
-            <div class="other-support">
-                <p>也可以通过以下方式支持：</p>
-                <ul>
-                    <li>在GitHub上给项目点Star</li>
-                    <li>分享给需要的朋友</li>
-                    <li>提交Issue帮助改进</li>
-                    <li>贡献代码和想法</li>
-                </ul>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // Modal控制函数
-        function showWeChatGroupModal() {
-            document.getElementById('wechat-modal').classList.add('active');
-            document.body.style.overflow = 'hidden';
-        }
-
-        function showSupportModal() {
-            document.getElementById('support-modal').classList.add('active');
-            document.body.style.overflow = 'hidden';
-        }
-
-        function closeModal(event, modalId) {
-            event.stopPropagation();
-            document.getElementById(modalId).classList.remove('active');
-            document.body.style.overflow = '';
-        }
-
-        // ESC键关闭Modal
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                document.querySelectorAll('.modal').forEach(modal => {
-                    modal.classList.remove('active');
-                });
-                document.body.style.overflow = '';
-            }
-        });
-
-        // 阻止Modal内容点击冒泡
-        document.querySelectorAll('.modal-content').forEach(content => {
-            content.addEventListener('click', (e) => {
-                e.stopPropagation();
-            });
-        });
-    </script>
 
     {% block scripts %}{% endblock %}
 
