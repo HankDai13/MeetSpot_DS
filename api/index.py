@@ -706,17 +706,22 @@ async def _process_meetspot_request(request: MeetSpotRequest, start_time: float)
         print(f"📝 收到请求: {request.model_dump()}")
 
         # 检查配置
-        if config:
-            api_key = config.amap.api_key
-            print(f"✅ 使用配置文件中的API密钥: {api_key[:10]}...")
-        else:
-            api_key = AMAP_API_KEY
-            print(f"✅ 使用环境变量中的API密钥: {api_key[:10]}...")
+        api_key = ""
+        config_amap = getattr(config, "amap", None) if config else None
+        if config_amap:
+            api_key = config_amap.web_service_key or config_amap.api_key or ""
+            if api_key:
+                print(f"✅ 使用配置文件中的API密钥: {api_key[:10]}...")
+
+        if not api_key:
+            api_key = os.getenv("AMAP_WEB_SERVICE_KEY", "") or os.getenv("AMAP_API_KEY", "") or AMAP_API_KEY
+            if api_key:
+                print(f"✅ 使用环境变量中的API密钥: {api_key[:10]}...")
 
         if not api_key:
             raise HTTPException(
                 status_code=500,
-                detail="高德地图API密钥未配置，请设置AMAP_API_KEY环境变量或配置config.toml文件"
+                detail="高德地图Web服务API密钥未配置，请设置AMAP_WEB_SERVICE_KEY或配置amap.web_service_key"
             )
 
         # ========== 智能路由：根据复杂度选择模式 ==========

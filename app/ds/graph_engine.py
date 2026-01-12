@@ -60,6 +60,18 @@ class CampusGraph:
         self.adjacency_list: Dict[str, List[Tuple[str, float]]] = {}
         self.nodes: Dict[str, Dict] = {}
         self._loaded = False
+        # Edge sanity filters to avoid cross-campus and long-jump artifacts.
+        self.max_edge_distance_m = 5000.0
+        self.min_weight_ratio = 0.1
+
+    def _node_in_campuses(self, node_id: str, campuses: Optional[set]) -> bool:
+        if not campuses:
+            return True
+        node = self.nodes.get(node_id)
+        if not node:
+            return False
+        campus = node.get("campus")
+        return campus in campuses
     
     def load_data(self, nodes_file: str, edges_file: str) -> bool:
         """
@@ -83,7 +95,8 @@ class CampusGraph:
                     "id": node_id,
                     "lat": node["lat"],
                     "lng": node["lng"],
-                    "name": node.get("name", node_id)
+                    "name": node.get("name", node_id),
+                    "campus": node.get("campus")
                 }
                 self.adjacency_list[node_id] = []
             
@@ -95,6 +108,28 @@ class CampusGraph:
                 from_node = edge["from"]
                 to_node = edge["to"]
                 weight = edge["weight"]
+                from_data = self.nodes.get(from_node)
+                to_data = self.nodes.get(to_node)
+                if not from_data or not to_data:
+                    continue
+
+                # Drop cross-campus edges when campus info is available.
+                from_campus = from_data.get("campus")
+                to_campus = to_data.get("campus")
+                if from_campus and to_campus and from_campus != to_campus:
+                    continue
+
+                # Drop abnormal long-jump edges or broken weights.
+                distance = haversine_distance(
+                    from_data["lat"], from_data["lng"],
+                    to_data["lat"], to_data["lng"]
+                )
+                if distance > self.max_edge_distance_m:
+                    continue
+                if distance > 0 and weight is not None:
+                    ratio = weight / distance if weight > 0 else 0
+                    if ratio < self.min_weight_ratio:
+                        continue
                 
                 # Add both directions for undirected graph
                 if from_node in self.adjacency_list:
@@ -109,7 +144,12 @@ class CampusGraph:
             print(f"Error loading graph data: {e}")
             return False
     
-    def dijkstra(self, start: str, end: str) -> Tuple[float, List[str]]:
+    def dijkstra(
+        self,
+        start: str,
+        end: str,
+        campuses: Optional[set] = None
+    ) -> Tuple[float, List[str]]:
         """
         Find the shortest path between two nodes using Dijkstra's algorithm.
         
@@ -133,6 +173,8 @@ class CampusGraph:
             return (float('inf'), [])
         
         if start not in self.nodes or end not in self.nodes:
+            return (float('inf'), [])
+        if not self._node_in_campuses(start, campuses) or not self._node_in_campuses(end, campuses):
             return (float('inf'), [])
         
         # Distance from start to each node
@@ -171,6 +213,8 @@ class CampusGraph:
             for neighbor, weight in self.adjacency_list[current_node]:
                 if neighbor in visited:
                     continue
+                if not self._node_in_campuses(neighbor, campuses):
+                    continue
                 
                 new_distance = current_dist + weight
                 
@@ -194,7 +238,12 @@ class CampusGraph:
         
         return (distances[end], path)
     
-    def get_nearest_node(self, lat: float, lng: float) -> Optional[str]:
+    def get_nearest_node(
+        self,
+        lat: float,
+        lng: float,
+        campuses: Optional[set] = None
+    ) -> Optional[str]:
         """
         Find the nearest graph node to given coordinates.
         
@@ -215,6 +264,8 @@ class CampusGraph:
         nearest_node = None
         
         for node_id, node_data in self.nodes.items():
+            if campuses and node_data.get("campus") not in campuses:
+                continue
             distance = haversine_distance(
                 lat, lng,
                 node_data["lat"], node_data["lng"]

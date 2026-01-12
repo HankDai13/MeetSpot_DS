@@ -3,6 +3,7 @@ import html
 import json
 import math
 import os
+import re
 import uuid
 from datetime import datetime
 from functools import lru_cache
@@ -137,6 +138,7 @@ class CafeRecommender(BaseTool):
 
     # 高德地图API密钥
     api_key: str = Field(default="")
+    js_api_key: str = Field(default="")
 
     # 缓存请求结果以减少API调用（路演模式：极限压缩防止OOM）
     geocode_cache: Dict[str, Dict] = Field(default_factory=dict)
@@ -495,6 +497,25 @@ class CafeRecommender(BaseTool):
             "price_range": biz_ext.get("cost", "¥¥"),
         }
 
+    def _init_amap_keys(self) -> None:
+        """初始化高德 Web 服务 & JS Key（允许分别配置）"""
+        if self.api_key and self.js_api_key:
+            return
+
+        amap_config = getattr(config, "amap", None)
+        env_default = os.getenv("AMAP_API_KEY", "")
+        env_web = os.getenv("AMAP_WEB_SERVICE_KEY", "")
+        env_js = os.getenv("AMAP_JS_API_KEY", "")
+
+        config_default = getattr(amap_config, "api_key", "") if amap_config else ""
+        config_web = getattr(amap_config, "web_service_key", "") if amap_config else ""
+        config_js = getattr(amap_config, "js_api_key", "") if amap_config else ""
+
+        if not self.api_key:
+            self.api_key = env_web or config_web or env_default or config_default
+        if not self.js_api_key:
+            self.js_api_key = env_js or config_js or env_default or config_default
+
     async def execute(
         self,
         locations: List[str],
@@ -507,18 +528,11 @@ class CafeRecommender(BaseTool):
         price_range: str = "",  # 价格区间筛选
     ) -> ToolResult:
         # 尝试从多个来源获取API key
+        self._init_amap_keys()
+
         if not self.api_key:
-            # 首先尝试从config对象获取
-            if hasattr(config, "amap") and config.amap and hasattr(config.amap, "api_key"):
-                self.api_key = config.amap.api_key
-            # 如果config不可用，尝试从环境变量获取
-            elif not self.api_key:
-                import os
-                self.api_key = os.getenv("AMAP_API_KEY", "")
-        
-        if not self.api_key:
-            logger.error("高德地图API密钥未配置。请在config.toml中设置 amap.api_key 或设置环境变量 AMAP_API_KEY。")
-            return ToolResult(output="推荐失败: 高德地图API密钥未配置。")
+            logger.error("高德地图Web服务API密钥未配置。请设置AMAP_WEB_SERVICE_KEY或配置amap.web_service_key。")
+            return ToolResult(output="推荐失败: 高德地图Web服务API密钥未配置。")
 
         # ========== 校园模式检测 ==========
         # 只有当 ALL 位置都是厦门大学相关时，才使用本地算法
@@ -555,7 +569,6 @@ class CafeRecommender(BaseTool):
         try:
             coordinates = []
             location_info = []
-            geocode_results = []  # 存储原始 geocode 结果用于后续分析
 
             # 并行地理编码 - 大幅提升性能
             async def geocode_with_delay(location: str, index: int):
@@ -568,6 +581,9 @@ class CafeRecommender(BaseTool):
             geocode_tasks = [geocode_with_delay(loc, i) for i, loc in enumerate(locations)]
             geocode_raw_results = await asyncio.gather(*geocode_tasks, return_exceptions=True)
 
+            geocode_results_map: List[Optional[Dict[str, Any]]] = [None] * len(locations)
+            failed_locations: List[Tuple[int, str]] = []
+
             # 处理结果并检查错误
             for i, (location, result) in enumerate(zip(locations, geocode_raw_results)):
                 if isinstance(result, Exception):
@@ -575,19 +591,51 @@ class CafeRecommender(BaseTool):
                     result = None
 
                 if not result:
-                    # 检查是否为大学简称但地理编码失败
-                    enhanced_address = self._enhance_address(location)
-                    if enhanced_address != location:
-                        return ToolResult(output=f"无法找到地点: {location}\n\n识别为大学简称\n您输入的 '{location}' 可能是大学简称，但未能成功解析。\n\n建议尝试：\n完整名称：'{enhanced_address}'\n添加城市：'北京 {location}'、'上海 {location}'\n具体地址：'北京市海淀区{enhanced_address}'\n校区信息：如 '{location}本部'、'{location}新校区'")
-                    else:
-                        # 提供更详细的地址输入指导
-                        suggestions = self._get_address_suggestions(location)
-                        return ToolResult(output=f"无法找到地点: {location}\n\n地址解析失败\n系统无法识别您输入的地址，请检查以下几点：\n\n具体建议：\n{suggestions}\n\n标准地址格式示例：\n完整地址：'北京市海淀区中关村大街27号'\n知名地标：'北京大学'、'天安门广场'、'上海外滩'\n商圈区域：'三里屯'、'王府井'、'南京路步行街'\n交通枢纽：'北京南站'、'上海虹桥机场'\n\n常见错误避免：\n避免过于简短：'大学' -> '北京大学'\n避免拼写错误：'北大' -> '北京大学'\n避免模糊描述：'那个商场' -> '王府井百货大楼'\n\n如果仍有问题：\n检查网络连接是否正常\n尝试使用地址的官方全称\n确认地点确实存在且对外开放")
+                    failed_locations.append((i, location))
+                    continue
 
-                geocode_results.append({
+                geocode_results_map[i] = {
                     "original_location": location,
                     "result": result
-                })
+                }
+
+            unresolved_locations: List[str] = []
+            if failed_locations:
+                context_prefix = self._infer_context_prefix(locations)
+                main_city = self._infer_main_city(
+                    [item["result"] for item in geocode_results_map if item]
+                )
+
+                async def retry_geocode(location: str, index: int):
+                    if index > 0:
+                        await asyncio.sleep(0.05 * index)
+                    return await self._retry_geocode_with_candidates(
+                        location,
+                        main_city=main_city,
+                        context_prefix=context_prefix
+                    )
+
+                retry_tasks = [
+                    retry_geocode(location, idx)
+                    for idx, (_, location) in enumerate(failed_locations)
+                ]
+                retry_results = await asyncio.gather(*retry_tasks, return_exceptions=True)
+
+                for (i, location), retry_result in zip(failed_locations, retry_results):
+                    if isinstance(retry_result, Exception):
+                        logger.error(f"模糊地理编码异常: {location} - {retry_result}")
+                        retry_result = None
+                    if retry_result:
+                        geocode_results_map[i] = {
+                            "original_location": location,
+                            "result": retry_result
+                        }
+                    else:
+                        unresolved_locations.append(location)
+
+            geocode_results = [item for item in geocode_results_map if item]
+            if unresolved_locations and geocode_results:
+                logger.warning(f"部分地址解析失败，已跳过: {unresolved_locations}")
 
             # 智能城市推断：检测是否有地点被解析到完全不同的城市
             if len(geocode_results) > 1:
@@ -845,6 +893,7 @@ class CafeRecommender(BaseTool):
                 detected_campuses = ["思明"]
             
             logger.info(f"检测到校区: {detected_campuses}")
+            campus_scope = set(detected_campuses)
             
             # 计算中心点
             if len(detected_campuses) == 1:
@@ -858,9 +907,7 @@ class CafeRecommender(BaseTool):
                 campus_center_lng = sum(CAMPUSES[c]["lng"] for c in detected_campuses) / len(detected_campuses)
                 city_name = "厦门市"
             
-            center_point = (campus_center_lng, campus_center_lat)
-            
-            logger.info(f"校园模式: 中心点 ({campus_center_lat:.4f}, {campus_center_lng:.4f}) - {detected_campuses}")
+            logger.info(f"校园模式: 校区中心 ({campus_center_lat:.4f}, {campus_center_lng:.4f}) - {detected_campuses}")
             
             # 构造 location_info（获取真实坐标）
             # 策略: 
@@ -950,6 +997,20 @@ class CafeRecommender(BaseTool):
                     "city": "厦门市"
                 })
             
+            # 使用参与者坐标计算中心点（最佳会面点）
+            participant_coords = [
+                (loc["lng"], loc["lat"]) for loc in location_info
+                if loc.get("lng") is not None and loc.get("lat") is not None
+            ]
+            if participant_coords:
+                center_point = self._calculate_center_point(participant_coords)
+                center_lng, center_lat = center_point
+                logger.info(f"校园模式: 参与者中心点 ({center_lat:.4f}, {center_lng:.4f}) - {detected_campuses}")
+            else:
+                center_point = (campus_center_lng, campus_center_lat)
+                center_lng, center_lat = center_point
+                logger.warning("校园模式: 参与者坐标为空，使用校区中心")
+
             # 使用 KDTree 范围查询附近 POI
             search_radius = min(max_distance, 2000)  # 校园模式限制最大2km
             
@@ -969,13 +1030,22 @@ class CafeRecommender(BaseTool):
             else:
                 # 单校区模式：直接搜索中心点附近
                 nearby_pois = _campus_kdtree.search_nearby(
-                    (campus_center_lat, campus_center_lng),
+                    (center_lat, center_lng),
                     search_radius
                 )
                 logger.info(f"KDTree 查询: 在 {search_radius}m 内找到 {len(nearby_pois)} 个 POI")
             
             if not nearby_pois:
                 return ToolResult(output="校园模式: 未找到附近的场所，请尝试扩大搜索范围")
+
+            # 按校区过滤 POI（避免跨校区混入）
+            if campus_scope:
+                nearby_pois = [
+                    p for p in nearby_pois
+                    if not p.get("campus") or p.get("campus") in campus_scope
+                ]
+                if not nearby_pois:
+                    return ToolResult(output="校园模式: 当前校区内未找到符合条件的场所")
             
             # 根据关键词过滤 POI 类型
             type_mapping = {
@@ -999,7 +1069,11 @@ class CafeRecommender(BaseTool):
                     logger.info(f"按类型 '{target_type}' 过滤后剩余 {len(nearby_pois)} 个 POI")
             
             # 获取校园图的中心节点
-            center_node = _campus_graph.get_nearest_node(campus_center_lat, campus_center_lng)
+            center_node = _campus_graph.get_nearest_node(
+                center_lat,
+                center_lng,
+                campuses=campus_scope
+            )
             logger.info(f"中心点最近节点: {center_node}")
             
             # 使用 Dijkstra 计算到每个 POI 的路径距离
@@ -1009,8 +1083,21 @@ class CafeRecommender(BaseTool):
                 
                 if poi_node:
                     # 使用 Dijkstra 计算最短路径
-                    path_distance, path_nodes = _campus_graph.dijkstra(center_node, poi_node)
-                    path_coords = _campus_graph.get_path_coords(path_nodes)
+                    path_distance, path_nodes = _campus_graph.dijkstra(
+                        center_node,
+                        poi_node,
+                        campuses=campus_scope
+                    )
+                    if math.isinf(path_distance) or not path_nodes:
+                        from app.ds.graph_engine import haversine_distance
+                        path_distance = haversine_distance(
+                            center_lat, center_lng,
+                            poi["lat"], poi["lng"]
+                        )
+                        path_coords = []
+                        path_nodes = []
+                    else:
+                        path_coords = _campus_graph.get_path_coords(path_nodes)
                 else:
                     # 如果没有关联节点，使用直线距离估算
                     from app.ds.graph_engine import haversine_distance
@@ -1238,6 +1325,106 @@ class CafeRecommender(BaseTool):
 
         return address
 
+    def _normalize_address(self, address: str) -> str:
+        """规范化地址文本，减少噪声影响地理编码"""
+        if not address:
+            return address
+        cleaned = re.sub(r"[()（）\\[\\]【】]", "", address)
+        cleaned = re.sub(r"[，,;；|/]+", " ", cleaned)
+        cleaned = re.sub(r"\\s+", " ", cleaned).strip()
+        return cleaned
+
+    def _strip_address_suffix(self, address: str) -> str:
+        """移除常见模糊后缀，提升地理编码命中率"""
+        if not address:
+            return address
+        cleaned = re.sub(r"(附近的|周边的|周围的|附近|周边|周围|旁边|门口)$", "", address).strip()
+        return cleaned
+
+    def _infer_main_city(self, geocode_results: List[Dict[str, Any]]) -> str:
+        """根据已解析结果推断主流城市"""
+        cities = []
+        for result in geocode_results:
+            city = result.get("city") or result.get("province") or ""
+            if isinstance(city, list):
+                city = city[0] if city else ""
+            if city:
+                cities.append(city)
+        if not cities:
+            return ""
+        from collections import Counter
+        return Counter(cities).most_common(1)[0][0]
+
+    def _infer_context_prefix(self, locations: List[str]) -> str:
+        """根据输入位置推断公共前缀（用于校园/同城解析）"""
+        campus_prefixes = {
+            "思明": "厦门大学思明校区",
+            "翔安": "厦门大学翔安校区",
+        }
+        for loc in locations:
+            if "校区" in loc:
+                for campus, prefix in campus_prefixes.items():
+                    if campus in loc:
+                        return prefix
+        for loc in locations:
+            if "厦门大学" in loc or "厦大" in loc:
+                return "厦门大学"
+        return ""
+
+    def _build_geocode_candidates(
+        self,
+        address: str,
+        main_city: str = "",
+        context_prefix: str = ""
+    ) -> List[str]:
+        candidates: List[str] = []
+
+        def add(candidate: str) -> None:
+            if candidate and candidate not in candidates:
+                candidates.append(candidate)
+
+        base = self._normalize_address(address)
+        add(base)
+        enhanced = self._enhance_address(base)
+        add(enhanced)
+
+        for variant in [base, enhanced]:
+            trimmed = self._strip_address_suffix(variant)
+            add(trimmed)
+
+        city_prefix = main_city.strip()
+        city_core = city_prefix.replace("市", "")
+        if city_prefix:
+            for candidate in list(candidates):
+                if city_prefix in candidate or (city_core and city_core in candidate):
+                    continue
+                add(f"{city_prefix}{candidate}")
+
+        if context_prefix:
+            for candidate in list(candidates):
+                if context_prefix in candidate:
+                    continue
+                add(f"{context_prefix}{candidate}")
+
+        return candidates[:8]
+
+    async def _retry_geocode_with_candidates(
+        self,
+        address: str,
+        main_city: str = "",
+        context_prefix: str = ""
+    ) -> Optional[Dict[str, Any]]:
+        candidates = self._build_geocode_candidates(address, main_city, context_prefix)
+        for candidate in candidates:
+            if candidate == address:
+                continue
+            result = await self._geocode(candidate)
+            if result:
+                self.geocode_cache[address] = result
+                logger.info(f"模糊地理编码成功: '{address}' -> '{candidate}'")
+                return result
+        return None
+
     def _geocode_local_campus(self, address: str) -> Optional[Dict]:
         """[混合模式] 本地解析校园地址"""
         for name, data in self.CAMPUS_DATA.items():
@@ -1329,15 +1516,15 @@ class CafeRecommender(BaseTool):
         
         # 确保API密钥已设置
         if not self.api_key:
-            if hasattr(config, "amap") and config.amap and hasattr(config.amap, "api_key"):
-                self.api_key = config.amap.api_key
-            else:
-                logger.error("高德地图API密钥未配置")
-                return None
+            self._init_amap_keys()
+        if not self.api_key:
+            logger.error("高德地图Web服务API密钥未配置")
+            return None
         
         
+        normalized_address = self._normalize_address(address)
         # 智能地址增强
-        enhanced_address = self._enhance_address(address)
+        enhanced_address = self._enhance_address(normalized_address)
 
         # ========== 混合模式：本地数据优先 ==========
         # 如果是校园位置，直接返回本地坐标，不调用 Amap API
@@ -3036,6 +3223,9 @@ class CafeRecommender(BaseTool):
         amap_security_js_code = ""
         if hasattr(config, 'amap') and hasattr(config.amap, 'security_js_code') and config.amap.security_js_code:
             amap_security_js_code = config.amap.security_js_code
+        if not self.js_api_key:
+            self._init_amap_keys()
+        amap_js_key = self.js_api_key or self.api_key
 
         # 读取设计token CSS内容，用于自包含HTML
         design_tokens_css = ""
@@ -3613,7 +3803,7 @@ class CafeRecommender(BaseTool):
             script.src = 'https://webapi.amap.com/loader.js';
             script.onload = function() {{
                 AMapLoader.load({{
-                    key: "{self.api_key}", 
+                    key: "{amap_js_key}", 
                     version: "2.0",
                     plugins: ["AMap.Scale", "AMap.ToolBar"],
                     AMapUI: {{ version: "1.1", plugins: ["overlay/SimpleMarker"] }}
@@ -3654,9 +3844,16 @@ class CafeRecommender(BaseTool):
                     markerContent = `<div style="background-color: ${{color}}; width: 24px; height: 24px; border-radius: 12px; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.3);"></div>`;
                 }}
 
+                var zIndex = 100;
+                if (item.icon === 'location') {{
+                    zIndex = 200;
+                }} else if (item.icon === 'center') {{
+                    zIndex = 300;
+                }}
                 var marker = new AMap.Marker({{
                     position: position, content: markerContent,
-                    title: item.name, anchor: 'center', offset: new AMap.Pixel(0, item.icon === 'place' ? 0 : -20)
+                    title: item.name, anchor: 'center', offset: new AMap.Pixel(0, item.icon === 'place' ? 0 : -20),
+                    zIndex: zIndex
                 }});
                 var infoWindow = new AMap.InfoWindow({{
                     content: '<div style="padding:10px;font-size:14px;">' + item.name + '</div>',
@@ -3681,83 +3878,15 @@ class CafeRecommender(BaseTool):
             }}
             
             // ========== 校园模式路径绘制 ==========
-            // 使用高德地图步行路径规划API绘制真实道路路径
+            // 使用本地 Dijkstra 路径绘制（不调用高德路径规划）
             var localModeData = {local_mode_json};
-            var centerLngLat = new AMap.LngLat({center_point[0]}, {center_point[1]});
-            
             var isLocalMode = localModeData.some(function(p) {{ return p.is_local; }});
             if (isLocalMode) {{
-                console.log('校园模式: 使用步行路径规划绘制路径');
-                
-                // 加载步行路径规划插件
-                AMap.plugin('AMap.Walking', function() {{
-                    var walking = new AMap.Walking({{
-                        map: map,
-                        panel: null,
-                        hideMarkers: true,  // 隐藏默认标记
-                        autoFitView: false
-                    }});
-                    
-                    // 为每个推荐场所绘制步行路径
-                    localModeData.forEach(function(placeData, index) {{
-                        if (!placeData.is_local) return;
-                        
-                        var pathCoords = placeData.path_coords;
-                        if (pathCoords && pathCoords.length >= 2) {{
-                            // 获取目的地坐标（路径的最后一个点）
-                            var destCoord = pathCoords[pathCoords.length - 1];
-                            var destLngLat = new AMap.LngLat(destCoord[0], destCoord[1]);
-                            
-                            // 使用步行路径规划
-                            walking.search(centerLngLat, destLngLat, function(status, result) {{
-                                if (status === 'complete' && result.routes && result.routes.length > 0) {{
-                                    // 获取路径坐标
-                                    var route = result.routes[0];
-                                    var walkPath = [];
-                                    route.steps.forEach(function(step) {{
-                                        walkPath = walkPath.concat(step.path);
-                                    }});
-                                    
-                                    // 绘制自定义样式的路径
-                                    var walkPolyline = new AMap.Polyline({{
-                                        path: walkPath,
-                                        strokeColor: '#FF4444',
-                                        strokeWeight: 5,
-                                        strokeOpacity: 0.85,
-                                        strokeStyle: 'solid',
-                                        lineJoin: 'round',
-                                        lineCap: 'round',
-                                        zIndex: 100 + index,
-                                        showDir: true  // 显示方向箭头
-                                    }});
-                                    walkPolyline.setMap(map);
-                                    
-                                    // 添加点击事件
-                                    walkPolyline.on('click', function() {{
-                                        var distance = route.distance;
-                                        var time = Math.ceil(route.time / 60);
-                                        var infoWindow = new AMap.InfoWindow({{
-                                            content: '<div style="padding:10px;font-size:13px;"><strong>🚶 步行路径</strong><br/>目的地: ' + placeData.name + '<br/>距离: ' + distance + '米<br/>预计时间: ' + time + '分钟</div>',
-                                            offset: new AMap.Pixel(0, -5)
-                                        }});
-                                        infoWindow.open(map, walkPath[Math.floor(walkPath.length / 2)]);
-                                    }});
-                                    
-                                    console.log('路径绘制成功: ' + placeData.name + ', 距离: ' + route.distance + 'm');
-                                }} else {{
-                                    // 如果路径规划失败，使用原始Dijkstra路径（带曲线优化）
-                                    console.log('路径规划失败，使用备用方案: ' + placeData.name);
-                                    drawFallbackPath(pathCoords, placeData.name, index);
-                                }}
-                            }});
-                        }}
-                    }});
-                }});
-                
-                // 备用绘制函数：当步行路径规划失败时使用
-                function drawFallbackPath(pathCoords, placeName, index) {{
-                    if (pathCoords.length < 2) return;
-                    
+                console.log('校园模式: 使用本地 Dijkstra 路径绘制');
+
+                function drawLocalPath(pathCoords, index) {{
+                    if (!pathCoords || pathCoords.length < 2) return;
+
                     var path;
                     if (pathCoords.length === 2) {{
                         // 只有2个点时，添加贝塞尔曲线中间点
@@ -3769,7 +3898,7 @@ class CafeRecommender(BaseTool):
                         var offset = 0.0005;
                         var perpLng = midLng + (end[1] - start[1]) * offset * 10;
                         var perpLat = midLat - (end[0] - start[0]) * offset * 10;
-                        
+
                         path = [
                             new AMap.LngLat(start[0], start[1]),
                             new AMap.LngLat(perpLng, perpLat),
@@ -3780,13 +3909,13 @@ class CafeRecommender(BaseTool):
                             return new AMap.LngLat(coord[0], coord[1]);
                         }});
                     }}
-                    
+
                     var polyline = new AMap.Polyline({{
                         path: path,
                         strokeColor: '#FF4444',
                         strokeWeight: 4,
                         strokeOpacity: 0.8,
-                        strokeStyle: 'dashed',  // 使用虚线区分
+                        strokeStyle: 'solid',
                         lineJoin: 'round',
                         lineCap: 'round',
                         zIndex: 100 + index,
@@ -3794,10 +3923,18 @@ class CafeRecommender(BaseTool):
                     }});
                     polyline.setMap(map);
                 }}
-                
+
+                localModeData.forEach(function(placeData, index) {{
+                    if (!placeData.is_local) return;
+                    var pathCoords = placeData.path_coords || [];
+                    if (pathCoords.length >= 2) {{
+                        drawLocalPath(pathCoords, index);
+                    }}
+                }});
+
                 // 添加校园模式图例
                 var legendDiv = document.createElement('div');
-                legendDiv.innerHTML = '<div style="position:absolute;top:10px;right:10px;background:white;padding:10px 15px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.15);font-size:12px;z-index:999;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="display:inline-block;width:20px;height:3px;background:#FF4444;"></span><span>步行路径</span></div><div style="display:flex;align-items:center;gap:8px;"><span style="display:inline-block;width:20px;height:3px;background:#3498db;border-top:2px dashed #3498db;"></span><span>参与者连线</span></div></div>';
+                legendDiv.innerHTML = '<div style="position:absolute;top:10px;right:10px;background:white;padding:10px 15px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.15);font-size:12px;z-index:999;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="display:inline-block;width:20px;height:3px;background:#FF4444;"></span><span>Dijkstra 路径</span></div><div style="display:flex;align-items:center;gap:8px;"><span style="display:inline-block;width:20px;height:3px;background:#3498db;border-top:2px dashed #3498db;"></span><span>参与者连线</span></div></div>';
                 document.getElementById('map').appendChild(legendDiv);
             }}
             
