@@ -4,7 +4,8 @@
 # 高德地图API配置
 [amap]
 # 去高德官网申请关于web端的api，会有两个秘钥，一个APIKEY，一个安全密钥，不用充钱
-api_key = "YOUR_AMAP_API_KEY"  # 替换为您的高德Web服务API Key
+web_service_key = "Your_AMAP_WEB_SERVICE_KEY"  #替换为您的高德Web服务API Key
+js_api_key = "YOUR_AMAP_API_KEY"  # 替换为您的高德地图JS API Key
 security_js_code = "YOUR_AMAP_SECURITY_JS_CODE"  # 替换为您的高德地图JS API安全密钥
 
 # 使用deepseek的话需要加上base_url，需要充几块钱

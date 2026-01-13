@@ -1,45 +1,26 @@
-# Favicon 设置说明
+# 前端图标与资源说明
+
+本文件用于说明前端静态资源的放置与可选优化，适用于 **厦门大学人工智能系《数据结构》大作业** 提交材料。
 
 ## 当前状态
-MeetSpot目前缺少favicon（网站图标）。
+- Favicon 不是课程必需项，可不提供。
+- 若需要完整展示，可添加 favicon 以提升页面完整度。
 
-## 如何添加Favicon
+## 可选配置（如需美化）
+- 推荐生成以下文件到 `public/`：
+  - `favicon.ico`
+  - `favicon-16x16.png`
+  - `favicon-32x32.png`
+  - `apple-touch-icon.png`
+  - `android-chrome-192x192.png`
+  - `android-chrome-512x512.png`
 
-### 方法1: 使用在线工具生成
-1. 访问 https://realfavicongenerator.net/
-2. 上传品牌Logo（推荐至少 512x512 px）
-3. 自动生成多种尺寸的favicon
-4. 下载并解压到 `public/` 目录
-
-### 方法2: 手动创建
-创建以下文件到 `public/` 目录：
-- favicon.ico (16x16, 32x32)
-- favicon-16x16.png
-- favicon-32x32.png
-- apple-touch-icon.png (180x180)
-- android-chrome-192x192.png
-- android-chrome-512x512.png
-
-### 方法3: 使用SVG (推荐)
-创建 `public/favicon.svg`，现代浏览器支持矢量图标。
-
-## 在HTML中引用
-
-添加到 `<head>` 标签中：
-
+在 HTML `<head>` 中添加：
 ```html
-<!-- Favicon -->
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-<link rel="manifest" href="/site.webmanifest">
 ```
 
-## 设计建议
-
-推荐使用：
-- 颜色：紫色渐变 (#667eea to #764ba2) 匹配品牌
-- 图标：地图标记 + 人群图标
-- 风格：简约、现代
-
+## 说明
+本项目重点为数据结构与算法实现，前端资源仅作为演示辅助。
