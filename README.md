@@ -1,68 +1,69 @@
-# MeetSpot Campus Edition
+# MeetSpot 校园会面点推荐系统
 
-> 厦门大学人工智能系《数据结构》大作业  
-> Course project based on the open-source MeetSpot.
+## 1. 项目背景与目标
+- 面向校园场景，增加本地路网与校园 POI 数据，强化数据结构与算法应用。
+- 目标：在校园内实现不依赖第三方路径规划的会面点推荐，并可视化 Dijkstra 路径。
 
-## Project Overview
-This repository adapts the open-source MeetSpot system for Xiamen University campus scenarios. We added a local campus map, data-structure-based routing, and spatial search to support a full campus mode while keeping AMap as an off-campus fallback.
+## 2. 系统功能
+- 多人会面点推荐（中心点计算 + 评分排序）
+- 校园模式：本地 Dijkstra + KDTree 搜索
+- 高德模式：校外地址使用高德地理编码与 POI 搜索
+- 结果页：地图标注、路线绘制、推荐列表
 
-## Features
-- Multi-person meeting point recommendation
-- Campus mode (XMU): local graph routing + KDTree POI search
-- AMap mode: geocoding and POI search for non-campus locations
-- Interactive HTML result page with map, markers, and local routes
+## 3. 数据结构与算法实现
+- **图结构（邻接表）**：校园路网图由 `nodes.json` 与 `edges.json` 构建。
+- **Dijkstra 最短路径**：从中心点节点到 POI 节点的最短路径，作为距离依据。
+- **KDTree 空间索引**：快速检索指定半径内的校园 POI。
+- **中心点计算**：两点用球面中点，多点用质心，保证公平性。
 
-## Data Structures & Algorithms
-- Graph (adjacency list) built from `data/campus/nodes.json` and `data/campus/edges.json`
-- Dijkstra shortest path for campus walking distances
-- KDTree spatial range search for campus POIs from `data/campus/pois.json`
-- Center point calculation: spherical midpoint for 2 points, centroid for 3+ points
+## 4. 系统流程（校园模式）
+1. 识别输入是否为厦大相关地点
+2. 本地 POI 模糊匹配与地理编码兜底
+3. 计算参与者中心点并定位最近路网节点
+4. KDTree 范围搜索候选 POI
+5. Dijkstra 计算最短路径距离并排序
+6. 生成 HTML 地图与路径展示
 
-## Quick Start
+## 5. 关键实现与改造点
+- **双 Key 机制**：Web 服务 Key 用于后端请求，JS Key 用于地图渲染。
+- **校区约束**：避免跨校区边与 POI 混入，保证路径合理。
+- **本地路径绘制**：校园模式使用 Dijkstra 路径，不调用高德步行规划。
+- **模糊地址增强**：对校园内简称做本地匹配，提高解析成功率。
+
+## 6. 运行环境与配置
+- Python 3.11
+- FastAPI + aiohttp
+- AMap Key（Web 服务 + JS）
+- deepseek api
+
+### 安装与配置
+1. 安装依赖：
 ```bash
-# Install dependencies
 pip install -r requirements.txt
+```
+2. 复制 `.env.example` 为 `.env`，填写高德 Web 服务 Key 与 JS Key。
 
-# Configure keys (AMap)
-# Web service key for backend requests
-export AMAP_WEB_SERVICE_KEY=your_web_service_key
-# JS key for map rendering
-export AMAP_JS_API_KEY=your_js_key
-# Optional: JS security code if enabled in AMap console
-export AMAP_SECURITY_JS_CODE=your_security_code
-
-# Run
+### 启动与访问
+```bash
 python web_server.py
 ```
-Open http://127.0.0.1:8000
+启动后访问：
+- Web 页面：`http://localhost:8000`
+- API 文档：`http://localhost:8000/docs`
+- 健康检查：`http://localhost:8000/health`
 
-## Campus Mode Trigger
-If all input locations are XMU-related keywords ("厦大", "厦门大学", "思明", "翔安"), the system switches to campus mode.
+### 操作说明
+- 在页面中输入多个地点，系统会计算最佳会面点并生成推荐列表与地图。
+- 当输入地点均为厦门大学相关时自动进入校园模式，使用本地 Dijkstra 路径与 KDTree。
+- 推荐结果会生成 HTML 文件，保存于 `workspace/js_src/`，可直接打开查看完整地图与路径。
 
-Example request:
-```json
-{
-  "locations": ["厦门大学翔安校区竞丰餐厅", "厦门大学德旺图书馆"],
-  "keywords": "咖啡馆"
-}
-```
+## 7. 结果与展示
+- 支持厦门大学思明/翔安校区输入
+- 输出包含最佳会面点、推荐列表与本地最短路径
 
-## Project Structure (Relevant)
-```
-MeetSpot/
-├── api/                       # FastAPI entry
-├── app/                       # Core logic
-│   ├── ds/                    # Graph + KDTree implementations
-│   └── tool/meetspot_recommender.py
-├── data/campus/               # Campus nodes/edges/POIs
-├── public/                    # Frontend assets
-└── workspace/js_src/          # Generated HTML (runtime cache)
-```
+## 8. 局限与改进方向
+- 路网数据仍有精细度提升空间
+- 可进一步优化路径平滑与多源 POI 融合
+- 后续可加入更多校园或更细粒度道路等级
 
-## Course Submission Notes
-- This is the **Xiamen University AI Department Data Structures course project**.
-- `workspace/js_src/` contains generated HTML and should not be committed.
-- Do not commit `.env` or API keys; keep secrets local.
 
-## Acknowledgements
-Based on the open-source project: https://github.com/JasonRobertDestiny/MeetSpot
